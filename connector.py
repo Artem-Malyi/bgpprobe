@@ -34,8 +34,7 @@
 
 
 import os
-import socket
-os.sys.path.append('/home/team13/scapy')
+os.sys.path.append('./scapy')
 
 from scapy.all import *
 from scapy.layers.inet import *
