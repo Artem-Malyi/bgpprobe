@@ -1,0 +1,8 @@
+How to add bgp layer to scapy.
+
+0. git clone https://github.com/secdev/scapy.git
+
+1. sudo cp ./bgp.py ./scapy/scapy/layers/
+
+2. sudo mcedit /usr/share/pyshared/scapy/config.py
+   add "bgp" to load_layers list

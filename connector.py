@@ -33,7 +33,9 @@
 #      Established <-- Open Confirmed    
 
 
+import os
 import socket
+os.sys.path.append('/home/team13/scapy')
 
 from scapy.all import *
 from scapy.layers.inet import *
