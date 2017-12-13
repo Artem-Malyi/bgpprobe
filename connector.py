@@ -36,9 +36,12 @@
 import os
 os.sys.path.append('./scapy')
 
+import subprocess
+
 from scapy.all import *
 from scapy.layers.inet import *
 from scapy.layers.bgp import *
+
 
 outNic = "ens38"
 myIp   = "10.10.10.2"
@@ -139,13 +142,13 @@ def stopFilter(p):
         return False
 
     
-def bgpConnect(ipAddr):
+def bgpConnect(ipAddress):
     global srcPort
     global randomSeq
 
-    print "[i] trying to connect to", ipAddr
+    print "[i] trying to connect to", ipAddress
 
-    syn = Ether() / IP(dst=ipAddr, id=int(RandShort())) / TCP(sport=srcPort, dport=179, ack=0, seq=randomSeq, flags="S")
+    syn = Ether() / IP(dst=ipAddress, id=int(RandShort())) / TCP(sport=srcPort, dport=179, ack=0, seq=randomSeq, flags="S")
     print "[i] sending SYN packet:", syn.summary()
     sendp(syn, iface=outNic)
 
@@ -153,5 +156,40 @@ def bgpConnect(ipAddr):
 
     print "[i] exiting"
 
+    
+def suppressTcpRstReplies(ipAddress):
+    ruleLabel = "'suppress tcp rst replies'"
+    checkIptablesRule = "sudo iptables -nvL | grep " + ruleLabel
+    p = subprocess.Popen(checkIptablesRule, shell=True, stdout=subprocess.PIPE, stderr=subprocess.STDOUT)
+    if p.stdout.readline():
+        print "[i] Found tcp rst rule. Do nothing."
+        return
+    print "[i] Not found tcp rst rule. Adding one."
+    setIptablesRule = "sudo iptables -A OUTPUT -p TCP --tcp-flags RST RST -s " + ipAddress + " -j DROP -m comment --comment " + ruleLabel
+    subprocess.Popen(setIptablesRule, shell=True, stdout=subprocess.PIPE, stderr=subprocess.STDOUT)
 
+    
+###############################
+
+suppressTcpRstReplies(myIp)
 bgpConnect(peerIp)
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
