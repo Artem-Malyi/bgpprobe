@@ -1,13 +1,6 @@
 #!/usr/bin/env python
 # -*- coding: utf8 -*-
 
-# TCP flags legend:
-# FIN 1
-# SYN 2
-# RST 4
-# PSH 8
-# ACK 16
-# URG 32
 
 # BGP message types:
 # 1 - OPEN
@@ -39,6 +32,15 @@ from scapy.all import *
 from scapy.layers.inet import *
 from scapy.layers.bgp import *
 
+
+class tcpFlags:
+    FIN = 1
+    SYN = 2
+    RST = 4
+    PSH = 8
+    ACK = 16
+    URG = 32
+
 class bgpState:
     IDLE = 0
     CONNECT = 1
@@ -69,24 +71,34 @@ class bgpProbe:
         print "[i] sending SYN packet:", syn.summary()
         sendp(syn, iface=self.outNic)
 
-        sniff(filter="tcp", stop_filter=self.stopFilter, store=0, prn=self.handlePackets)
+        sniff(filter="tcp", stop_filter=self.stopParsePackets, store=0, prn=self.parsePackets)
 
         print "[i] exiting"
 
         
-    def stopFilter(self, p):
-        if not p.haslayer(TCP):
-            return False
-   
-        if p[TCP].flags == 25 and p[IP].src == self.peerIp or p[TCP].flags == 4 and p[IP].src == self.peerIp:
-            # if any TCP packet with flags PSH + FIN + ACK or RST
-            print "[+] peer", self.peerIp, "goes Disconnect"
-            return True
-        else:
+    def stopParsePackets(self, p):
+        if not p.haslayer(TCP) or p[IP].src != self.peerIp:
             return False
         
+        if p[TCP].flags == tcpFlags.RST or p[TCP].flags == tcpFlags.FIN + tcpFlags.PSH + tcpFlags.ACK:
+            # if TCP packet with flags RST or FIN + PSH + ACK
+            print "[+] got FIN or RST packet:", p.summary()
+            print "[+] peer", self.peerIp, "goes Disconnect"
+            return True
+       
+        if self.getState() == bgpState.ESTABLISHED:
+            print "[+] connection to BGP peer was established!"            
+            print "[+] peer", self.peerIp, "goes Disconnect"
+            return True
 
-    def handlePackets(self, p):
+        #TODO:
+        #if 5 seconds elapsed
+        #    return True
+
+        return False
+
+
+    def parsePackets(self, p):
         if not p.haslayer(IP) or not p.haslayer(TCP):
             #print "[-] not a TCP/IP packet:", p.summary()
             return
@@ -155,7 +167,8 @@ class bgpProbe:
             #send(updatePacket)
 
         
-
+    def getState(self):
+        return self.state
     
 
 # need to suppress tcp-rst packets from our machine:
