@@ -15,11 +15,6 @@
 # 3 - NOTIFICATION
 # 4 - KEEPALIVE
 
-
-# need to run suppress tcp-rst packets from our machine:
-#     sudo iptables -A OUTPUT -p TCP --tcp-flags RST RST -s 10.10.10.2 -j DROP
-
-
 # bgp state machine:
 #
 #        Connect  --->  Active 
@@ -33,10 +28,12 @@
 #      Established <-- Open Confirmed    
 
 
+# to run the current script from any location near to scapy/
 import os
 os.sys.path.append('./scapy')
 
-import subprocess
+# for setting iptables to suppress output tcp rst packets
+import subprocess 
 
 from scapy.all import *
 from scapy.layers.inet import *
@@ -50,24 +47,25 @@ class bgpState:
     OPENCONFIRMED = 4
     ESTABLISHED = 5
 
-class bgpCon:
+class bgpProbe:
     
-    def __init__(self, outNic, myIp, peerIp):
+    def __init__(self, outNic, myIp):
         self.outNic = outNic
         self.myIp = myIp
-        self.peerIp = peerIp
         self.srcPort = random.randint(40000, 65535)
         self.randomSeq = int(RandInt())
         self.handshakeOk = False
         self.bgpOpenSent = False
         self.firstKeepAliveSent = False
         self.state = bgpState.IDLE
+        self.peerIp = "0.0.0.0"
         
         
-    def bgpConnect(self):
-        print "[i] trying to connect to", peerIp
+    def connect(self, peerIp):
+        self.peerIp = peerIp
+        print "[i] trying to connect to", self.peerIp
 
-        syn = Ether() / IP(dst=peerIp, id=int(RandShort())) / TCP(sport=self.srcPort, dport=179, ack=0, seq=self.randomSeq, flags="S")
+        syn = Ether() / IP(dst=self.peerIp, id=int(RandShort())) / TCP(sport=self.srcPort, dport=179, ack=0, seq=self.randomSeq, flags="S")
         print "[i] sending SYN packet:", syn.summary()
         sendp(syn, iface=self.outNic)
 
@@ -80,9 +78,9 @@ class bgpCon:
         if not p.haslayer(TCP):
             return False
    
-        if p[TCP].flags == 25 and p[IP].src == peerIp or p[TCP].flags == 4 and p[IP].src == peerIp:
+        if p[TCP].flags == 25 and p[IP].src == self.peerIp or p[TCP].flags == 4 and p[IP].src == self.peerIp:
             # if any TCP packet with flags PSH + FIN + ACK or RST
-            print "[+] peer", peerIp, "goes Disconnect"
+            print "[+] peer", self.peerIp, "goes Disconnect"
             return True
         else:
             return False
@@ -158,10 +156,10 @@ class bgpCon:
 
         
 
-
     
 
-    
+# need to suppress tcp-rst packets from our machine:
+#     sudo iptables -A OUTPUT -p TCP --tcp-flags RST RST -s 10.10.10.2 -j DROP
 def suppressTcpRstReplies(ipAddress):
     ruleLabel = "'suppress tcp rst replies'"
     checkIptablesRule = "sudo iptables -nvL | grep " + ruleLabel
@@ -179,9 +177,10 @@ def suppressTcpRstReplies(ipAddress):
 myIp = "10.10.10.2"
 suppressTcpRstReplies(myIp)
 
+p = bgpProbe("ens38", myIp)
+
 peerIp = "10.10.10.1" #"170.104.164.236"
-c = bgpCon("ens38", myIp, peerIp)
-c.bgpConnect()
+p.connect(peerIp)
 
 
 
