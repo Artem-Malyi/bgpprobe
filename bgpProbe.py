@@ -33,7 +33,9 @@ from scapy.layers.inet import *
 from scapy.layers.bgp import *
 
 import logging
-logging.basicConfig(format='%(asctime)s %(message)s', level=logging.INFO, filename='myapp.log')
+logging.basicConfig(format='%(asctime)s %(message)s', level=logging.INFO) #, filename='myapp.log')
+
+import time
 
 
 class tcpFlags:
@@ -64,9 +66,12 @@ class bgpProbe:
         self.firstKeepAliveSent = False
         self.state = bgpState.IDLE
         self.peerIp = "0.0.0.0"
+        self.startTime = 0
+        self.timeOut = 5
         
         
     def connect(self, peerIp):
+        self.startTime = time.time()
         self.peerIp = peerIp
         logging.info("[i] trying to connect to %s", self.peerIp)
 
@@ -74,16 +79,24 @@ class bgpProbe:
         logging.info("[i] sending SYN packet: %s", syn.summary())
         sendp(syn, iface=self.outNic)
 
-        sniff(filter="tcp", stop_filter=self.stopParsePackets, store=0, prn=self.parsePackets)
+        sniff(iface=self.outNic, filter="ether", stop_filter=self.stopParsePackets, store=0, prn=self.parsePackets)
 
-        logging.info("[i] exiting")
+        logging.info("[i] exiting with probe state: %s", self.stateToString(self.getState()))
 
         
     def stopParsePackets(self, p):
+        currentTime = time.time();
+        if (currentTime - self.startTime >= self.timeOut):
+            logging.info("[i] exit due to timeout: %s seconds", self.timeOut)
+            return True
+        
         if not p.haslayer(TCP) or p[IP].src != self.peerIp:
             return False
         
-        if p[TCP].flags == tcpFlags.RST or p[TCP].flags == tcpFlags.FIN + tcpFlags.PSH + tcpFlags.ACK:
+        if (p[TCP].flags == tcpFlags.RST or 
+            p[TCP].flags == tcpFlags.RST + tcpFlags.ACK or
+            p[TCP].flags == tcpFlags.RST + tcpFlags.ACK + tcpFlags.FIN
+           ):
             # if TCP packet with flags RST or FIN + PSH + ACK
             logging.info("[+] got FIN or RST packet: %s", p.summary())
             logging.info("[+] peer %s goes Disconnect", self.peerIp)
@@ -93,10 +106,6 @@ class bgpProbe:
             logging.info("[+] connection to BGP peer was established!")           
             logging.info("[+] peer %s goes Disconnect", self.peerIp)
             return True
-
-        #TODO:
-        #if 5 seconds elapsed
-        #    return True
 
         return False
 
@@ -156,8 +165,6 @@ class bgpProbe:
 
         if p.haslayer(BGPHeader) and p[BGPHeader].type == 2:
             logging.info("[+] got BGPUPDATE from peer: %s", p.summary())
-            #update={'TYPE':0,'ORIGIN':'\x00','NEXT_HOP':'\x0a\x0a\x0a\x02','MULTI_EXIT_DISC':'\x00\x00\x00\x00','LOCAL_PREF':'\x00\x00\x00\x96','NLRI':[(24, '192.168.2.0')],'AS_PATH':'65002'}
-            #updatePacket = Ether() / IP(dst=p[IP].src, id=int(RandShort())) / TCP(sport=p[TCP].dport, dport=p[TCP].sport, ack=p[TCP].seq+p[BGPHeader].len, seq=p[TCP].ack, flags="PA") / Raw(load=update)
             sendp(Ether() / IP(dst=p[IP].src, id=int(RandShort())) / TCP(sport=p[TCP].dport, dport=p[TCP].sport, ack=p[TCP].seq+p[BGPHeader].len, seq=p[TCP].ack, flags="PA") /
                   BGPHeader(type=2) / BGPUpdate(nlri='192.168.2.0/24',
                                                 total_path=[BGPPathAttribute(type='ORIGIN', value='\x00'),
@@ -168,10 +175,26 @@ class bgpProbe:
                                                            ]), iface=self.outNic)			
             #print "[i] sending BGPUPDATE packet:", updatePacket.summary()
             #send(updatePacket)
+            self.state = bgpState.ESTABLISHED
 
         
     def getState(self):
         return self.state
+    
+    
+    def stateToString(self, state):
+        if state == bgpState.IDLE:
+            return "IDLE"
+        if state == bgpState.CONNECT:
+            return "CONNECT"
+        if state == bgpState.ACTIVE:
+            return "ACTIVE"
+        if state == bgpState.OPENSENT:
+            return "OPENSENT"
+        if state == bgpState.OPENCONFIRMED:
+            return "OPENCONFIRMED"
+        if state == bgpState.ESTABLISHED:
+            return "ESTABLISHED"
     
 
 # need to suppress tcp-rst packets from our machine:
