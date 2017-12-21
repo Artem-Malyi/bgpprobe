@@ -88,7 +88,7 @@ class bgpProbe:
 
         syn = Ether() / IP(dst=self.peerIp, id=int(RandShort())) / TCP(sport=self.srcPort, dport=179, ack=0, seq=self.randomSeq, flags="S")
         bgpLog.info("[i] sending SYN packet: %s", syn.summary())
-        sendp(syn, iface=self.outNic)
+        sendp(syn, iface=self.outNic, verbose=0)
 
         sniff(iface=self.outNic, filter="ether", stop_filter=self.stopParsePackets, store=0, prn=self.parsePackets)
 
@@ -135,14 +135,14 @@ class bgpProbe:
             # got a SYN+ACK, note the peer's seq to use later in BGPOpen and send an ACK now
             ack = Ether() / IP(dst=p[IP].src, id=int(RandShort())) / TCP(sport=p[TCP].dport, dport=p[TCP].sport, ack=p[TCP].seq+1, seq=p[TCP].ack, flags="A")
             bgpLog.info("[i] sending ACK packet: %s", ack.summary())
-            sendp(ack, iface=self.outNic)	
+            sendp(ack, iface=self.outNic, verbose=0)	
             self.handshakeOk = True
             bgpLog.info("[+] completed TCP handshake with %s", self.peerIp)
 
         if self.handshakeOk and not self.bgpOpenSent:
-            bgpOpen = Ether() / IP(dst=p[IP].src, id=int(RandShort())) / TCP(sport=p[TCP].dport, dport=p[TCP].sport, ack=p[TCP].seq+1, seq=p[TCP].ack, flags="PA") / BGPHeader(type=1) / BGPOpen(version=4, AS=65002, hold_time=180, bgp_id=myIp)
+            bgpOpen = Ether() / IP(dst=p[IP].src, id=int(RandShort())) / TCP(sport=p[TCP].dport, dport=p[TCP].sport, ack=p[TCP].seq+1, seq=p[TCP].ack, flags="PA") / BGPHeader(type=1) / BGPOpen(version=4, AS=65002, hold_time=180, bgp_id=self.myIp)
             bgpLog.info("[i] sending BGPOPEN packet: %s", bgpOpen.summary())
-            sendp(bgpOpen, iface=self.outNic)
+            sendp(bgpOpen, iface=self.outNic, verbose=0)
             self.bgpOpenSent = True
 
         if self.bgpOpenSent and p.haslayer(BGPOpen) and not self.firstKeepAliveSent:
@@ -152,10 +152,10 @@ class bgpProbe:
             #print "type:", p[BGPHeader].type, "len1:", p[BGPHeader].len, "len2:", pl[BGPHeader].len
             ack2 = Ether() / IP(dst=p[IP].src, id=int(RandShort())) / TCP(sport=p[TCP].dport, dport=p[TCP].sport, ack=p[TCP].seq+p[BGPHeader].len+pl[BGPHeader].len, seq=p[TCP].ack, flags="A")
             bgpLog.info("[i] sending ACK packet: %s, len: %s", ack2.summary(), p[BGPHeader].len)
-            sendp(ack2, iface=self.outNic)
+            sendp(ack2, iface=self.outNic, verbose=0)
             keepAlive = Ether() / IP(dst=p[IP].src, id=int(RandShort())) / TCP(sport=p[TCP].dport, dport=p[TCP].sport, ack=p[TCP].seq+p[BGPHeader].len+pl[BGPHeader].len, seq=p[TCP].ack, flags="PA") / BGPHeader(type=4, len=19)
             bgpLog.info("[i] sending first BGPKEEPALIVE packet: %s", keepAlive.summary())
-            sendp(keepAlive, iface=self.outNic)
+            sendp(keepAlive, iface=self.outNic, verbose=0)
             self.firstKeepAliveSent = True
             return
 
@@ -164,7 +164,7 @@ class bgpProbe:
             bgpLog.info("[+] got BGPKEEPALIVE from peer: %s, seq: %s, ack: %s", p.summary(), p[TCP].seq, p[TCP].ack)
             ack2 = Ether() / IP(dst=p[IP].src, id=int(RandShort())) / TCP(sport=p[TCP].dport, dport=p[TCP].sport, ack=p[TCP].seq+p[BGPHeader].len, seq=p[TCP].ack, flags="A")
             bgpLog.info("[i] sending ACK packet: %s", ack2.summary())
-            sendp(ack2, iface=self.outNic)
+            sendp(ack2, iface=self.outNic, verbose=0)
 
         if p.haslayer(BGPHeader) and p[BGPHeader].type == 3:
             bgpLog.info("[+] got BGPNOTIFICATION from peer: %s", p.summary())
@@ -178,7 +178,7 @@ class bgpProbe:
                                                             BGPPathAttribute(flags=128L, type='MULTI_EXIT_DISC', value='\x00\x00\x00\x00'),
                                                             BGPPathAttribute(type='LOCAL_PREF', value='\x00\x00\x00\x96'),
                                                             BGPPathAttribute(type='AS_PATH', value=''),
-                                                           ]), iface=self.outNic)			
+                                                           ]), iface=self.outNic, verbose=0)			
             #print "[i] sending BGPUPDATE packet:", updatePacket.summary()
             #send(updatePacket)
             self.state = bgpState.ESTABLISHED
@@ -215,11 +215,13 @@ p.connect(peerIp)
 mainLog.info("[i] finished bgpProbe on peer %s with state %s", peerIp, p.getState())
 
 peerIp = "10.10.10.5"
+mainLog.info("\n")
 mainLog.info("[i] started bgpProbe on peer %s", peerIp)
 p.connect(peerIp)
 mainLog.info("[i] finished bgpProbe on peer %s with state %s", peerIp, p.getState())
 
 peerIp = "10.10.10.10"
+mainLog.info("\n")
 mainLog.info("[i] started bgpProbe on peer %s", peerIp)
 p.connect(peerIp)
 mainLog.info("[i] finished bgpProbe on peer %s with state %s", peerIp, p.getState())
