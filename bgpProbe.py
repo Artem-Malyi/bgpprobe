@@ -27,6 +27,7 @@ os.sys.path.append('./scapy')
 
 # for setting iptables to suppress output tcp rst packets
 import subprocess 
+import time
 
 from scapy.all import *
 from scapy.layers.inet import *
@@ -35,7 +36,11 @@ from scapy.layers.bgp import *
 import logging
 logging.basicConfig(format='%(asctime)s %(message)s', level=logging.INFO) #, filename='myapp.log')
 
-import time
+bgpLog = logging.getLogger("bgpProbe")
+bgpLog.setLevel(logging.CRITICAL) # comment this line to enable logs
+
+mainLog = logging.getLogger("mainLog")
+#mainLog.setLevel(logging.CRITICAL) # comment this line to enable logs
 
 
 class tcpFlags:
@@ -78,21 +83,22 @@ class bgpProbe:
         self.resetParams()
         self.startTime = time.time()
         self.peerIp = peerIp
-        logging.info("[i] trying to connect to %s", self.peerIp)
+        bgpLog.info("\n")
+        bgpLog.info("[i] trying to connect to %s", self.peerIp)
 
         syn = Ether() / IP(dst=self.peerIp, id=int(RandShort())) / TCP(sport=self.srcPort, dport=179, ack=0, seq=self.randomSeq, flags="S")
-        logging.info("[i] sending SYN packet: %s", syn.summary())
+        bgpLog.info("[i] sending SYN packet: %s", syn.summary())
         sendp(syn, iface=self.outNic)
 
         sniff(iface=self.outNic, filter="ether", stop_filter=self.stopParsePackets, store=0, prn=self.parsePackets)
 
-        logging.info("[i] exiting with probe state: %s", self.stateToString(self.getState()))
+        bgpLog.info("[i] exiting with probe state: %s", self.stateToString(self.getState()))
 
         
     def stopParsePackets(self, p):
         currentTime = time.time();
         if (currentTime - self.startTime >= self.timeOut):
-            logging.info("[i] exit due to timeout: %s seconds", self.timeOut)
+            bgpLog.info("[i] exit due to timeout: %s seconds", self.timeOut)
             return True
         
         if not p.haslayer(TCP) or p[IP].src != self.peerIp:
@@ -103,13 +109,13 @@ class bgpProbe:
             p[TCP].flags == tcpFlags.RST + tcpFlags.ACK + tcpFlags.FIN
            ):
             # if TCP packet with flags RST or FIN + PSH + ACK
-            logging.info("[+] got FIN or RST packet: %s", p.summary())
-            logging.info("[+] peer %s goes Disconnect", self.peerIp)
+            bgpLog.info("[+] got FIN or RST packet: %s", p.summary())
+            bgpLog.info("[+] peer %s goes Disconnect", self.peerIp)
             return True
        
         if self.getState() == bgpState.ESTABLISHED:
-            logging.info("[+] connection to BGP peer was established!")           
-            logging.info("[+] peer %s goes Disconnect", self.peerIp)
+            bgpLog.info("[+] connection to BGP peer was established!")           
+            bgpLog.info("[+] peer %s goes Disconnect", self.peerIp)
             return True
 
         return False
@@ -125,46 +131,46 @@ class bgpProbe:
             return
 
         if p[TCP].flags == 18 and not self.handshakeOk: 
-            logging.info("[+] got SYN+ACK packet: %s", p.summary())
+            bgpLog.info("[+] got SYN+ACK packet: %s", p.summary())
             # got a SYN+ACK, note the peer's seq to use later in BGPOpen and send an ACK now
             ack = Ether() / IP(dst=p[IP].src, id=int(RandShort())) / TCP(sport=p[TCP].dport, dport=p[TCP].sport, ack=p[TCP].seq+1, seq=p[TCP].ack, flags="A")
-            logging.info("[i] sending ACK packet: %s", ack.summary())
+            bgpLog.info("[i] sending ACK packet: %s", ack.summary())
             sendp(ack, iface=self.outNic)	
             self.handshakeOk = True
-            logging.info("[+] completed TCP handshake with %s", self.peerIp)
+            bgpLog.info("[+] completed TCP handshake with %s", self.peerIp)
 
         if self.handshakeOk and not self.bgpOpenSent:
             bgpOpen = Ether() / IP(dst=p[IP].src, id=int(RandShort())) / TCP(sport=p[TCP].dport, dport=p[TCP].sport, ack=p[TCP].seq+1, seq=p[TCP].ack, flags="PA") / BGPHeader(type=1) / BGPOpen(version=4, AS=65002, hold_time=180, bgp_id=myIp)
-            logging.info("[i] sending BGPOPEN packet: %s", bgpOpen.summary())
+            bgpLog.info("[i] sending BGPOPEN packet: %s", bgpOpen.summary())
             sendp(bgpOpen, iface=self.outNic)
             self.bgpOpenSent = True
 
         if self.bgpOpenSent and p.haslayer(BGPOpen) and not self.firstKeepAliveSent:
             # got BGPOPEN, acknoledge it and send keepAlive
-            logging.info("[+] got BGPOPEN from peer: %s", p.summary())
+            bgpLog.info("[+] got BGPOPEN from peer: %s", p.summary())
             pl = BGPHeader(p.getlayer(Raw).load)
             #print "type:", p[BGPHeader].type, "len1:", p[BGPHeader].len, "len2:", pl[BGPHeader].len
             ack2 = Ether() / IP(dst=p[IP].src, id=int(RandShort())) / TCP(sport=p[TCP].dport, dport=p[TCP].sport, ack=p[TCP].seq+p[BGPHeader].len+pl[BGPHeader].len, seq=p[TCP].ack, flags="A")
-            logging.info("[i] sending ACK packet: %s, len: %s", ack2.summary(), p[BGPHeader].len)
+            bgpLog.info("[i] sending ACK packet: %s, len: %s", ack2.summary(), p[BGPHeader].len)
             sendp(ack2, iface=self.outNic)
             keepAlive = Ether() / IP(dst=p[IP].src, id=int(RandShort())) / TCP(sport=p[TCP].dport, dport=p[TCP].sport, ack=p[TCP].seq+p[BGPHeader].len+pl[BGPHeader].len, seq=p[TCP].ack, flags="PA") / BGPHeader(type=4, len=19)
-            logging.info("[i] sending first BGPKEEPALIVE packet: %s", keepAlive.summary())
+            bgpLog.info("[i] sending first BGPKEEPALIVE packet: %s", keepAlive.summary())
             sendp(keepAlive, iface=self.outNic)
             self.firstKeepAliveSent = True
             return
 
         if p.haslayer(BGPHeader) and p[BGPHeader].type == 4:
             # got BGPKEEPALIVE, send keep alive and listen for peer's keep alive 
-            logging.info("[+] got BGPKEEPALIVE from peer: %s, seq: %s, ack: %s", p.summary(), p[TCP].seq, p[TCP].ack)
+            bgpLog.info("[+] got BGPKEEPALIVE from peer: %s, seq: %s, ack: %s", p.summary(), p[TCP].seq, p[TCP].ack)
             ack2 = Ether() / IP(dst=p[IP].src, id=int(RandShort())) / TCP(sport=p[TCP].dport, dport=p[TCP].sport, ack=p[TCP].seq+p[BGPHeader].len, seq=p[TCP].ack, flags="A")
-            logging.info("[i] sending ACK packet: %s", ack2.summary())
+            bgpLog.info("[i] sending ACK packet: %s", ack2.summary())
             sendp(ack2, iface=self.outNic)
 
         if p.haslayer(BGPHeader) and p[BGPHeader].type == 3:
-            logging.info("[+] got BGPNOTIFICATION from peer: %s", p.summary())
+            bgpLog.info("[+] got BGPNOTIFICATION from peer: %s", p.summary())
 
         if p.haslayer(BGPHeader) and p[BGPHeader].type == 2:
-            logging.info("[+] got BGPUPDATE from peer: %s", p.summary())
+            bgpLog.info("[+] got BGPUPDATE from peer: %s", p.summary())
             sendp(Ether() / IP(dst=p[IP].src, id=int(RandShort())) / TCP(sport=p[TCP].dport, dport=p[TCP].sport, ack=p[TCP].seq+p[BGPHeader].len, seq=p[TCP].ack, flags="PA") /
                   BGPHeader(type=2) / BGPUpdate(nlri='192.168.2.0/24',
                                                 total_path=[BGPPathAttribute(type='ORIGIN', value='\x00'),
@@ -204,9 +210,9 @@ class bgpProbe:
         checkIptablesRule = "sudo iptables -nvL | grep " + ruleLabel
         p = subprocess.Popen(checkIptablesRule, shell=True, stdout=subprocess.PIPE, stderr=subprocess.STDOUT)
         if p.stdout.readline():
-            logging.info("[i] Found tcp rst rule. Do nothing.")
+            bgpLog.info("[i] Found tcp rst rule. Do nothing.")
             return
-        logging.info("[i] Not found tcp rst rule. Adding one.")
+        bgpLog.info("[i] Not found tcp rst rule. Adding one.")
         setIptablesRule = "sudo iptables -A OUTPUT -p TCP --tcp-flags RST RST -s " + self.myIp + " -j DROP -m comment --comment " + ruleLabel
         subprocess.Popen(setIptablesRule, shell=True, stdout=subprocess.PIPE, stderr=subprocess.STDOUT)
 
@@ -217,9 +223,17 @@ p = bgpProbe("ens38", "10.10.10.2")
 
 peerIp = "10.10.10.1" #"170.104.164.236"
 p.connect(peerIp)
-logging.info("[i] finished bgpProbe on peer %s with state %s", peerIp, p.stateToString(p.getState()))
+mainLog.info("[i] finished bgpProbe on peer %s with state %s", peerIp, p.stateToString(p.getState()))
 
-logging.info("[i] exit program")
+peerIp = "10.10.10.5"
+p.connect(peerIp)
+mainLog.info("[i] finished bgpProbe on peer %s with state %s", peerIp, p.stateToString(p.getState()))
+
+peerIp = "10.10.10.10"
+p.connect(peerIp)
+mainLog.info("[i] finished bgpProbe on peer %s with state %s", peerIp, p.stateToString(p.getState()))
+
+mainLog.info("[i] exit program")
 
 
 
