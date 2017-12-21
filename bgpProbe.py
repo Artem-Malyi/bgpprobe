@@ -23,7 +23,7 @@
 
 # to run the current script from any location near to scapy/
 import os
-os.sys.path.append('./scapy')
+os.sys.path.insert(1, './scapy')
 
 # for setting iptables to suppress output tcp rst packets
 import subprocess 
