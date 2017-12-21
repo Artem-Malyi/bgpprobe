@@ -52,12 +52,12 @@ class tcpFlags:
     URG = 32
 
 class bgpState:
-    IDLE = 0
-    CONNECT = 1
-    ACTIVE = 2
-    OPENSENT = 3
-    OPENCONFIRMED = 4
-    ESTABLISHED = 5
+    IDLE = "IDLE"
+    CONNECT = "CONNECT"
+    ACTIVE = "ACTIVE"
+    OPENSENT = "OPENSENT"
+    OPENCONFIRMED = "OPENCONFIRMED"
+    ESTABLISHED = "ESTABLISHED"
 
 class bgpProbe:
     
@@ -92,7 +92,7 @@ class bgpProbe:
 
         sniff(iface=self.outNic, filter="ether", stop_filter=self.stopParsePackets, store=0, prn=self.parsePackets)
 
-        bgpLog.info("[i] exiting with probe state: %s", self.stateToString(self.getState()))
+        bgpLog.info("[i] exiting with probe state: %s", self.getState())
 
         
     def stopParsePackets(self, p):
@@ -186,21 +186,6 @@ class bgpProbe:
         
     def getState(self):
         return self.state
-    
-    
-    def stateToString(self, state):
-        if state == bgpState.IDLE:
-            return "IDLE"
-        if state == bgpState.CONNECT:
-            return "CONNECT"
-        if state == bgpState.ACTIVE:
-            return "ACTIVE"
-        if state == bgpState.OPENSENT:
-            return "OPENSENT"
-        if state == bgpState.OPENCONFIRMED:
-            return "OPENCONFIRMED"
-        if state == bgpState.ESTABLISHED:
-            return "ESTABLISHED"
         
     
     # need to suppress tcp-rst packets from our machine:
@@ -219,21 +204,27 @@ class bgpProbe:
     
 #########################################################
 
+mainLog.info("[i] start loop")
+
 p = bgpProbe("ens38", "10.10.10.2")
 
 peerIp = "10.10.10.1" #"170.104.164.236"
+mainLog.info("\n")
+mainLog.info("[i] started bgpProbe on peer %s", peerIp)
 p.connect(peerIp)
-mainLog.info("[i] finished bgpProbe on peer %s with state %s", peerIp, p.stateToString(p.getState()))
+mainLog.info("[i] finished bgpProbe on peer %s with state %s", peerIp, p.getState())
 
 peerIp = "10.10.10.5"
+mainLog.info("[i] started bgpProbe on peer %s", peerIp)
 p.connect(peerIp)
-mainLog.info("[i] finished bgpProbe on peer %s with state %s", peerIp, p.stateToString(p.getState()))
+mainLog.info("[i] finished bgpProbe on peer %s with state %s", peerIp, p.getState())
 
 peerIp = "10.10.10.10"
+mainLog.info("[i] started bgpProbe on peer %s", peerIp)
 p.connect(peerIp)
-mainLog.info("[i] finished bgpProbe on peer %s with state %s", peerIp, p.stateToString(p.getState()))
+mainLog.info("[i] finished bgpProbe on peer %s with state %s", peerIp, p.getState())
 
-mainLog.info("[i] exit program")
+mainLog.info("[i] exit loop")
 
 
 
