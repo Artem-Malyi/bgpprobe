@@ -59,6 +59,11 @@ class bgpProbe:
     def __init__(self, outNic, myIp):
         self.outNic = outNic
         self.myIp = myIp
+        self.timeOut = 5
+        self.suppressTcpRstReplies()
+        
+        
+    def resetParams(self):
         self.srcPort = random.randint(40000, 65535)
         self.randomSeq = int(RandInt())
         self.handshakeOk = False
@@ -66,11 +71,11 @@ class bgpProbe:
         self.firstKeepAliveSent = False
         self.state = bgpState.IDLE
         self.peerIp = "0.0.0.0"
-        self.startTime = 0
-        self.timeOut = 5
+        self.startTime = 0       
         
         
     def connect(self, peerIp):
+        self.resetParams()
         self.startTime = time.time()
         self.peerIp = peerIp
         logging.info("[i] trying to connect to %s", self.peerIp)
@@ -154,11 +159,6 @@ class bgpProbe:
             ack2 = Ether() / IP(dst=p[IP].src, id=int(RandShort())) / TCP(sport=p[TCP].dport, dport=p[TCP].sport, ack=p[TCP].seq+p[BGPHeader].len, seq=p[TCP].ack, flags="A")
             logging.info("[i] sending ACK packet: %s", ack2.summary())
             sendp(ack2, iface=self.outNic)
-            #if not firstKeepAlive:
-            #	keepAlive = Ether() / IP(dst=p[IP].src, id=int(RandShort())) / TCP(sport=p[TCP].dport, dport=p[TCP].sport, ack=p[TCP].seq+p[BGPHeader].len, seq=p[TCP].ack, flags="PA") / BGPHeader(type=4, len=19)
-            #	print "[i] sending BGPKEEPALIVE packet:", keepAlive.summary()
-            #	sendp(keepAlive, iface=self.outNic)
-            #firstKeepAlive = False
 
         if p.haslayer(BGPHeader) and p[BGPHeader].type == 3:
             logging.info("[+] got BGPNOTIFICATION from peer: %s", p.summary())
@@ -195,31 +195,34 @@ class bgpProbe:
             return "OPENCONFIRMED"
         if state == bgpState.ESTABLISHED:
             return "ESTABLISHED"
+        
     
-
-# need to suppress tcp-rst packets from our machine:
-#     sudo iptables -A OUTPUT -p TCP --tcp-flags RST RST -s 10.10.10.2 -j DROP
-def suppressTcpRstReplies(ipAddress):
-    ruleLabel = "'suppress tcp rst replies'"
-    checkIptablesRule = "sudo iptables -nvL | grep " + ruleLabel
-    p = subprocess.Popen(checkIptablesRule, shell=True, stdout=subprocess.PIPE, stderr=subprocess.STDOUT)
-    if p.stdout.readline():
-        logging.info("[i] Found tcp rst rule. Do nothing.")
-        return
-    logging.info("[i] Not found tcp rst rule. Adding one.")
-    setIptablesRule = "sudo iptables -A OUTPUT -p TCP --tcp-flags RST RST -s " + ipAddress + " -j DROP -m comment --comment " + ruleLabel
-    subprocess.Popen(setIptablesRule, shell=True, stdout=subprocess.PIPE, stderr=subprocess.STDOUT)
+    # need to suppress tcp-rst packets from our machine:
+    #     sudo iptables -A OUTPUT -p TCP --tcp-flags RST RST -s 10.10.10.2 -j DROP
+    def suppressTcpRstReplies(self):
+        ruleLabel = "'suppress tcp rst replies'"
+        checkIptablesRule = "sudo iptables -nvL | grep " + ruleLabel
+        p = subprocess.Popen(checkIptablesRule, shell=True, stdout=subprocess.PIPE, stderr=subprocess.STDOUT)
+        if p.stdout.readline():
+            logging.info("[i] Found tcp rst rule. Do nothing.")
+            return
+        logging.info("[i] Not found tcp rst rule. Adding one.")
+        setIptablesRule = "sudo iptables -A OUTPUT -p TCP --tcp-flags RST RST -s " + self.myIp + " -j DROP -m comment --comment " + ruleLabel
+        subprocess.Popen(setIptablesRule, shell=True, stdout=subprocess.PIPE, stderr=subprocess.STDOUT)
 
     
-###############################
+#########################################################
 
-myIp = "10.10.10.2"
-suppressTcpRstReplies(myIp)
-
-p = bgpProbe("ens38", myIp)
+p = bgpProbe("ens38", "10.10.10.2")
 
 peerIp = "10.10.10.1" #"170.104.164.236"
 p.connect(peerIp)
+logging.info("[i] finished bgpProbe on peer %s with state %s", peerIp, p.stateToString(p.getState()))
+
+logging.info("[i] exit program")
+
+
+
 
 
 
