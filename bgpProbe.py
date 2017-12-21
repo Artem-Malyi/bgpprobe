@@ -90,6 +90,8 @@ class bgpProbe:
         bgpLog.info("[i] sending SYN packet: %s", syn.summary())
         sendp(syn, iface=self.outNic, verbose=0)
 
+        self.state = bgpState.CONNECT
+
         sniff(iface=self.outNic, filter="ether", stop_filter=self.stopParsePackets, store=0, prn=self.parsePackets)
 
         bgpLog.info("[i] exiting with probe state: %s", self.getState())
@@ -138,16 +140,19 @@ class bgpProbe:
             sendp(ack, iface=self.outNic, verbose=0)	
             self.handshakeOk = True
             bgpLog.info("[+] completed TCP handshake with %s", self.peerIp)
+            self.state = bgpState.ACTIVE
 
         if self.handshakeOk and not self.bgpOpenSent:
             bgpOpen = Ether() / IP(dst=p[IP].src, id=int(RandShort())) / TCP(sport=p[TCP].dport, dport=p[TCP].sport, ack=p[TCP].seq+1, seq=p[TCP].ack, flags="PA") / BGPHeader(type=1) / BGPOpen(version=4, AS=65002, hold_time=180, bgp_id=self.myIp)
             bgpLog.info("[i] sending BGPOPEN packet: %s", bgpOpen.summary())
             sendp(bgpOpen, iface=self.outNic, verbose=0)
             self.bgpOpenSent = True
+            self.state = bgpState.OPENSENT
 
         if self.bgpOpenSent and p.haslayer(BGPOpen) and not self.firstKeepAliveSent:
             # got BGPOPEN, acknoledge it and send keepAlive
             bgpLog.info("[+] got BGPOPEN from peer: %s", p.summary())
+            self.state = bgpState.OPENCONFIRMED
             pl = BGPHeader(p.getlayer(Raw).load)
             #print "type:", p[BGPHeader].type, "len1:", p[BGPHeader].len, "len2:", pl[BGPHeader].len
             ack2 = Ether() / IP(dst=p[IP].src, id=int(RandShort())) / TCP(sport=p[TCP].dport, dport=p[TCP].sport, ack=p[TCP].seq+p[BGPHeader].len+pl[BGPHeader].len, seq=p[TCP].ack, flags="A")
