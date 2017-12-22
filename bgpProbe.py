@@ -211,6 +211,9 @@ class bgpProbe:
     
 #########################################################
 
+#TODO: run tcpdump in background thread:
+#    sudo tcpdump -i ens38 -s 65535 -w output.pcap
+
 
 def main():
     # parse command line
@@ -239,15 +242,19 @@ def main():
             
         # create bgpProbe instance
         p = bgpProbe(args.n, args.i)
+
+        totalCount = len(ips)
+        count = 1
         
         # main scanning loop
-        mainLog.info("[i] going to scan %s ips", len(ips))
+        mainLog.info("[i] going to scan %s ips", totalCount)
         for ip in ips:
-            mainLog.info("\n")
-            mainLog.info("[i] started bgpProbe on peer %s", ip)
+            print("")
+            mainLog.info("[i] started bgpProbe on peer %s (%s of %s)", ip, count, totalCount)
             p.connect(ip)
             mainLog.info("[i] finished bgpProbe on peer %s with state %s", ip, p.getState())
             outFile.write(ip + "," + p.getState() + "\n")
+            count += 1
     
     finally:
         outFile.close()
