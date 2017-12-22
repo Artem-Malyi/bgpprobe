@@ -42,6 +42,8 @@ bgpLog.setLevel(logging.CRITICAL) # comment this line to enable logs
 mainLog = logging.getLogger("mainLog")
 #mainLog.setLevel(logging.CRITICAL) # comment this line to enable logs
 
+import argparse
+
 
 class tcpFlags:
     FIN = 1
@@ -209,31 +211,40 @@ class bgpProbe:
     
 #########################################################
 
-mainLog.info("[i] start loop")
 
-p = bgpProbe("ens38", "10.10.10.2")
-
-peerIp = "10.10.10.1" #"170.104.164.236"
-mainLog.info("\n")
-mainLog.info("[i] started bgpProbe on peer %s", peerIp)
-p.connect(peerIp)
-mainLog.info("[i] finished bgpProbe on peer %s with state %s", peerIp, p.getState())
-
-peerIp = "10.10.10.5"
-mainLog.info("\n")
-mainLog.info("[i] started bgpProbe on peer %s", peerIp)
-p.connect(peerIp)
-mainLog.info("[i] finished bgpProbe on peer %s with state %s", peerIp, p.getState())
-
-peerIp = "10.10.10.10"
-mainLog.info("\n")
-mainLog.info("[i] started bgpProbe on peer %s", peerIp)
-p.connect(peerIp)
-mainLog.info("[i] finished bgpProbe on peer %s with state %s", peerIp, p.getState())
-
-mainLog.info("[i] exit loop")
-
-
+def main():
+    # parse command line
+    parser = argparse.ArgumentParser(prog="bgpProbe", description="Tries to connect to BGP routers.")
+    parser.add_argument("-n", metavar="out_iface", help="output network interface name", required=True)
+    parser.add_argument("-i", metavar="out_ip", help="output ip address, it'll be the source address", required=True)
+    group = parser.add_mutually_exclusive_group(required=True)
+    group.add_argument("-f", metavar="file_with_ips", help="file containing ip addresses separated by \n")
+    group.add_argument("-t", metavar="target_ip", help="ip address to be probed", nargs="+")
+    args = parser.parse_args()
+        
+    try:
+        ips = []
+        if args.f != None:
+            pass # TODO: read ips from file
+        else:
+            ips = args.t
+            
+        p = bgpProbe(args.n, args.i)
+        
+        for ip in ips:
+            peerIp = "10.10.10.5"
+            mainLog.info("\n")
+            mainLog.info("[i] started bgpProbe on peer %s", ip)
+            p.connect(ip)
+            mainLog.info("[i] finished bgpProbe on peer %s with state %s", ip, p.getState())
+    
+    finally:
+        mainLog.info("[i] final exit!")
+        return -1
+    
+    
+if __name__ == "__main__":
+    sys.exit(main())
 
 
 
