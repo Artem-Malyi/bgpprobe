@@ -202,9 +202,9 @@ class bgpProbe:
         checkIptablesRule = "sudo iptables -nvL | grep " + ruleLabel
         p = subprocess.Popen(checkIptablesRule, shell=True, stdout=subprocess.PIPE, stderr=subprocess.STDOUT)
         if p.stdout.readline():
-            bgpLog.info("[i] Found tcp rst rule. Do nothing.")
+            bgpLog.info("[i] found tcp rst rule. Do nothing.")
             return
-        bgpLog.info("[i] Not found tcp rst rule. Adding one.")
+        bgpLog.info("[i] not found tcp rst rule. Adding one.")
         setIptablesRule = "sudo iptables -A OUTPUT -p TCP --tcp-flags RST RST -s " + self.myIp + " -j DROP -m comment --comment " + ruleLabel
         subprocess.Popen(setIptablesRule, shell=True, stdout=subprocess.PIPE, stderr=subprocess.STDOUT)
 
@@ -223,24 +223,36 @@ def main():
     args = parser.parse_args()
         
     try:
+        outFile = open("bgpprobes.txt", "w")
+        
+        # read ips list
         ips = []
         if args.f != None:
-            pass # TODO: read ips from file
+            mainLog.info("[i] started reading file")
+            inFile = open(args.f, "r")
+            for line in inFile:
+                ips.append(line)
+            inFile.close()
+            mainLog.info("[i] stopped reading file")
         else:
             ips = args.t
             
+        # create bgpProbe instance
         p = bgpProbe(args.n, args.i)
         
+        # main scanning loop
+        mainLog.info("[i] going to scan %s ips", len(ips))
         for ip in ips:
-            peerIp = "10.10.10.5"
             mainLog.info("\n")
             mainLog.info("[i] started bgpProbe on peer %s", ip)
             p.connect(ip)
             mainLog.info("[i] finished bgpProbe on peer %s with state %s", ip, p.getState())
+            outFile.write(ip + "," + p.getState() + "\n")
     
     finally:
-        mainLog.info("[i] final exit!")
-        return -1
+        outFile.close()
+        mainLog.info("[i] clean up and exit")
+        return 0
     
     
 if __name__ == "__main__":
