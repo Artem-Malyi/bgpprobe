@@ -225,18 +225,18 @@ def main():
     group.add_argument("-t", metavar="target_ip", help="ip address to be probed", nargs="+")
     args = parser.parse_args()
         
+    outFile = open("./bgpprobes.txt", "w")
+    
     try:
-        outFile = open("bgpprobes.txt", "w")
-        
         # read ips list
         ips = []
         if args.f != None:
             mainLog.info("[i] started reading file")
             inFile = open(args.f, "r")
             for line in inFile:
-                ips.append(line)
+                ips.append(line[:-1]) # remove the last newline in the string
             inFile.close()
-            mainLog.info("[i] stopped reading file")
+            mainLog.info("[+] stopped reading file")
         else:
             ips = args.t
             
@@ -252,10 +252,10 @@ def main():
             print("")
             mainLog.info("[i] started bgpProbe on peer %s (%s of %s)", ip, count, totalCount)
             p.connect(ip)
-            mainLog.info("[i] finished bgpProbe on peer %s with state %s", ip, p.getState())
+            mainLog.info("[+] finished bgpProbe on peer %s with state %s", ip, p.getState())
             outFile.write(ip + "," + p.getState() + "\n")
             count += 1
-    
+
     finally:
         outFile.close()
         mainLog.info("[i] clean up and exit")
