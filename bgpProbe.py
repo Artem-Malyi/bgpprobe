@@ -39,10 +39,14 @@ logging.basicConfig(format='%(asctime)s %(message)s', level=logging.INFO) #, fil
 bgpLog = logging.getLogger("bgpProbe")
 bgpLog.setLevel(logging.CRITICAL) # comment this line to enable logs
 
+workerLog = logging.getLogger("workerThread")
+#workerLog.setLevel(logging.CRITICAL) # comment this line to enable logs
+
 mainLog = logging.getLogger("mainLog")
 #mainLog.setLevel(logging.CRITICAL) # comment this line to enable logs
 
 import argparse
+import threading
 
 
 class tcpFlags:
@@ -209,6 +213,13 @@ class bgpProbe:
         subprocess.Popen(setIptablesRule, shell=True, stdout=subprocess.PIPE, stderr=subprocess.STDOUT)
 
     
+def workerThread(x, stopEvent):
+    while not stopEvent.is_set():
+        workerLog.info("[i] running workerThread")
+        stopEvent.wait(3)
+    workerLog.info("[i] exiting workerThread")
+    
+    
 #########################################################
 
 #TODO: run tcpdump in background thread:
@@ -225,7 +236,13 @@ def main():
     group.add_argument("-t", metavar="target_ip", help="ip address to be probed", nargs="+")
     args = parser.parse_args()
         
+    # create output file 
     outFile = open("./bgpprobes.txt", "w")
+    
+    # start tcpdump thread
+    workerStopEvent = threading.Event()
+    t = threading.Thread(target=workerThread, args=(0, workerStopEvent))
+    t.start()
     
     try:
         # read ips list
@@ -258,6 +275,7 @@ def main():
 
     finally:
         outFile.close()
+        workerStopEvent.set()
         mainLog.info("[i] clean up and exit")
         return 0
     
