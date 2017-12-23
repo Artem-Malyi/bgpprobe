@@ -213,17 +213,24 @@ class bgpProbe:
         subprocess.Popen(setIptablesRule, shell=True, stdout=subprocess.PIPE, stderr=subprocess.STDOUT)
 
     
-def workerThread(x, stopEvent):
-    while not stopEvent.is_set():
-        workerLog.info("[i] running workerThread")
-        stopEvent.wait(3)
-    workerLog.info("[i] exiting workerThread")
+def workerThread(iface, stopEvent):
+    #while not stopEvent.is_set():
+    #    workerLog.info("[i] running workerThread")
+    #    stopEvent.wait(3)
+    #workerLog.info("[i] exiting workerThread")
+    
+    workerLog.info("[i] starting tcpdump")
+    tcpdumpCmd = "sudo tcpdump -i " + iface + " -s 65535 -w bgpprobes.pcap"
+    p = subprocess.Popen(tcpdumpCmd, shell=True, stdout=subprocess.PIPE, stderr=subprocess.STDOUT)
+    
+    stopEvent.wait()
+    
+    workerLog.info("[i] stopping tcpdump")
+    p.kill()
     
     
 #########################################################
 
-#TODO: run tcpdump in background thread:
-#    sudo tcpdump -i ens38 -s 65535 -w output.pcap
 
 
 def main():
@@ -235,13 +242,16 @@ def main():
     group.add_argument("-f", metavar="file_with_ips", help="file containing ip addresses separated by \n")
     group.add_argument("-t", metavar="target_ip", help="ip address to be probed", nargs="+")
     args = parser.parse_args()
-        
+    
+    #conf.iface = args.n
+    #conf.route.resync()
+
     # create output file 
     outFile = open("./bgpprobes.txt", "w")
     
     # start tcpdump thread
     workerStopEvent = threading.Event()
-    t = threading.Thread(target=workerThread, args=(0, workerStopEvent))
+    t = threading.Thread(target=workerThread, args=(args.n, workerStopEvent))
     t.start()
     
     try:
