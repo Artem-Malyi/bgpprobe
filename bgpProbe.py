@@ -182,14 +182,16 @@ class bgpProbe:
 
         if p.haslayer(BGPHeader) and p[BGPHeader].type == 2:
             bgpLog.info("[+] got BGPUPDATE from peer: %s", p.summary())
-            sendp(Ether() / IP(dst=p[IP].src, id=int(RandShort())) / TCP(sport=p[TCP].dport, dport=p[TCP].sport, ack=p[TCP].seq+p[BGPHeader].len, seq=p[TCP].ack, flags="PA") /
-                  BGPHeader(type=2) / BGPUpdate(nlri='192.168.2.0/24',
-                                                total_path=[BGPPathAttribute(type='ORIGIN', value='\x00'),
-                                                            BGPPathAttribute(type='NEXT_HOP', value='\x0a\x0a\x0a\x02'),
-                                                            BGPPathAttribute(flags=128L, type='MULTI_EXIT_DISC', value='\x00\x00\x00\x00'),
-                                                            BGPPathAttribute(type='LOCAL_PREF', value='\x00\x00\x00\x96'),
-                                                            BGPPathAttribute(type='AS_PATH', value=''),
-                                                           ]), iface=self.outNic, verbose=0)			
+            sendUpdate = False
+            if sendUpdate:
+                sendp(Ether() / IP(dst=p[IP].src, id=int(RandShort())) / TCP(sport=p[TCP].dport, dport=p[TCP].sport, ack=p[TCP].seq+p[BGPHeader].len, seq=p[TCP].ack, flags="PA") /
+                      BGPHeader(type=2) / BGPUpdate(nlri='192.168.2.0/24',
+                                                    total_path=[BGPPathAttribute(type='ORIGIN', value='\x00'),
+                                                                BGPPathAttribute(type='NEXT_HOP', value='\x0a\x0a\x0a\x02'),
+                                                                BGPPathAttribute(flags=128L, type='MULTI_EXIT_DISC', value='\x00\x00\x00\x00'),
+                                                                BGPPathAttribute(type='LOCAL_PREF', value='\x00\x00\x00\x96'),
+                                                                BGPPathAttribute(type='AS_PATH', value=''),
+                                                               ]), iface=self.outNic, verbose=0)			
             #print "[i] sending BGPUPDATE packet:", updatePacket.summary()
             #send(updatePacket)
             self.state = bgpState.ESTABLISHED
@@ -214,11 +216,6 @@ class bgpProbe:
 
     
 def workerThread(iface, stopEvent):
-    #while not stopEvent.is_set():
-    #    workerLog.info("[i] running workerThread")
-    #    stopEvent.wait(3)
-    #workerLog.info("[i] exiting workerThread")
-    
     workerLog.info("[i] starting tcpdump")
     tcpdumpCmd = "sudo tcpdump -i " + iface + " -s 65535 -w bgpprobes.pcap"
     p = subprocess.Popen(tcpdumpCmd, shell=True, stdout=subprocess.PIPE, stderr=subprocess.STDOUT)
@@ -229,8 +226,7 @@ def workerThread(iface, stopEvent):
     p.kill()
     
     
-#########################################################
-
+###########################################################################################################################################################################
 
 
 def main():
