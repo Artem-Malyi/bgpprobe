@@ -66,14 +66,14 @@ class bgpState:
     ESTABLISHED = "ESTABLISHED"
 
 class bgpProbe:
-    
+
     def __init__(self, outNic, myIp):
         self.outNic = outNic
         self.myIp = myIp
         self.timeOut = 5
         self.suppressTcpRstReplies()
-        
-        
+
+
     def resetParams(self):
         self.srcPort = random.randint(40000, 65535)
         self.randomSeq = int(RandInt())
@@ -82,9 +82,9 @@ class bgpProbe:
         self.firstKeepAliveSent = False
         self.state = bgpState.IDLE
         self.peerIp = "0.0.0.0"
-        self.startTime = 0       
-        
-        
+        self.startTime = 0
+
+
     def connect(self, peerIp):
         self.resetParams()
         self.startTime = time.time()
@@ -102,16 +102,16 @@ class bgpProbe:
 
         bgpLog.info("[i] exiting with probe state: %s", self.getState())
 
-        
+
     def stopParsePackets(self, p):
         currentTime = time.time();
         if (currentTime - self.startTime >= self.timeOut):
             bgpLog.info("[i] exit due to timeout: %s seconds", self.timeOut)
             return True
-        
+
         if not p.haslayer(TCP) or p[IP].src != self.peerIp:
             return False
-        
+
         if (p[TCP].flags == tcpFlags.RST or 
             p[TCP].flags == tcpFlags.RST + tcpFlags.ACK or
             p[TCP].flags == tcpFlags.RST + tcpFlags.ACK + tcpFlags.FIN
@@ -120,9 +120,9 @@ class bgpProbe:
             bgpLog.info("[+] got FIN or RST packet: %s", p.summary())
             bgpLog.info("[+] peer %s goes Disconnect", self.peerIp)
             return True
-       
+
         if self.getState() == bgpState.ESTABLISHED:
-            bgpLog.info("[+] connection to BGP peer was established!")           
+            bgpLog.info("[+] connection to BGP peer was established!")
             bgpLog.info("[+] peer %s goes Disconnect", self.peerIp)
             return True
 
@@ -196,11 +196,11 @@ class bgpProbe:
             #send(updatePacket)
             self.state = bgpState.ESTABLISHED
 
-        
+
     def getState(self):
         return self.state
-        
-    
+
+
     # need to suppress tcp-rst packets from our machine:
     #     sudo iptables -A OUTPUT -p TCP --tcp-flags RST RST -s 10.10.10.2 -j DROP
     def suppressTcpRstReplies(self):
@@ -214,18 +214,18 @@ class bgpProbe:
         setIptablesRule = "sudo iptables -A OUTPUT -p TCP --tcp-flags RST RST -s " + self.myIp + " -j DROP -m comment --comment " + ruleLabel
         subprocess.Popen(setIptablesRule, shell=True, stdout=subprocess.PIPE, stderr=subprocess.STDOUT)
 
-    
+
 def workerThread(iface, stopEvent):
     workerLog.info("[i] starting tcpdump")
     tcpdumpCmd = "sudo tcpdump -i " + iface + " -s 65535 -w bgpprobes.pcap"
     p = subprocess.Popen(tcpdumpCmd, shell=True, stdout=subprocess.PIPE, stderr=subprocess.STDOUT)
-    
+
     stopEvent.wait()
-    
+
     workerLog.info("[i] stopping tcpdump")
     p.kill()
-    
-    
+
+
 ###########################################################################################################################################################################
 
 
@@ -238,18 +238,18 @@ def main():
     group.add_argument("-f", metavar="file_with_ips", help="file containing ip addresses separated by \n")
     group.add_argument("-t", metavar="target_ip", help="ip address to be probed", nargs="+")
     args = parser.parse_args()
-    
+
     #conf.iface = args.n
     #conf.route.resync()
 
     # create output file 
     outFile = open("./bgpprobes.txt", "w")
-    
+
     # start tcpdump thread
     workerStopEvent = threading.Event()
     t = threading.Thread(target=workerThread, args=(args.n, workerStopEvent))
     t.start()
-    
+
     try:
         # read ips list
         ips = []
@@ -262,13 +262,13 @@ def main():
             mainLog.info("[+] stopped reading file")
         else:
             ips = args.t
-            
+
         # create bgpProbe instance
         p = bgpProbe(args.n, args.i)
 
         totalCount = len(ips)
         count = 1
-        
+
         # main scanning loop
         mainLog.info("[i] going to scan %s ips", totalCount)
         for ip in ips:
@@ -284,8 +284,8 @@ def main():
         workerStopEvent.set()
         mainLog.info("[i] clean up and exit")
         return 0
-    
-    
+
+
 if __name__ == "__main__":
     sys.exit(main())
 
