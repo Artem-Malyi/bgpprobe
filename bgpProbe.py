@@ -27,13 +27,15 @@ os.sys.path.insert(1, './scapy')
 
 # for setting iptables to suppress output tcp rst packets
 import subprocess 
-import time
+
+import logging
+logging.getLogger("scapy.runtime").setLevel(logging.ERROR)
+logging.getLogger("scapy.interactive").setLevel(logging.ERROR)
 
 from scapy.all import *
 from scapy.layers.inet import *
 from scapy.layers.bgp import *
 
-import logging
 logging.basicConfig(format='%(asctime)s %(message)s', level=logging.INFO) #, filename='myapp.log')
 
 bgpLog = logging.getLogger("bgpProbe")
@@ -45,6 +47,7 @@ workerLog = logging.getLogger("workerThread")
 mainLog = logging.getLogger("mainLog")
 #mainLog.setLevel(logging.CRITICAL) # comment this line to enable logs
 
+import time
 import argparse
 import threading
 
