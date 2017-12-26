@@ -242,8 +242,8 @@ def main():
     #conf.iface = args.n
     #conf.route.resync()
 
-    # create output file 
-    outFile = open("./bgpprobes.txt", "w")
+    # create output file, flush to disk after each line
+    outFile = open("./bgpprobes.txt", "w", 1)
 
     # start tcpdump thread
     workerStopEvent = threading.Event()
